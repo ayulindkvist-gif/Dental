@@ -1,0 +1,1283 @@
+openapi: 3.1.0
+info:
+  title: DentalCare App API
+  description: |
+    REST API для мобильного приложения сети стоматологических клиник
+    
+    ## Описание системы
+    
+    DentalCare App — клиент-серверная система с мобильным фронтендом (Android) и REST-backend (FastAPI).
+    
+    **Назначение:** Обеспечение цифрового взаимодействия между пациентами, врачами и администраторами 
+    стоматологических клиник.
+    
+    ## Основные возможности
+    
+    - Запись на приём к врачу
+    - Управление расписанием
+    - Загрузка и просмотр результатов обследований
+    - Push-уведомления
+    - Система отзывов и рейтингов
+    - Прайс-лист услуг
+    
+    ## Роли пользователей
+    
+    - **Пациент** - запись на приём, просмотр результатов, уведомления
+    - **Врач** - расписание, карточки пациентов, загрузка результатов
+    - **Администратор** - подтверждение записей, управление расписанием
+    
+  version: 1.0.0
+  contact:
+    name: DentalCare Support
+    email: support@dentalcare.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: https://api.dentalcare.example.com
+    description: Production server
+
+tags:
+  - name: General
+    description: Общая информация об API
+  - name: Doctors
+    description: Управление врачами и их расписанием
+  - name: Appointments
+    description: Управление записями на приём
+  - name: Medical Results
+    description: Результаты обследований
+  - name: Patients
+    description: Управление данными пациентов
+  - name: Notifications
+    description: Push-уведомления
+  - name: Services
+    description: Услуги и прайс-лист клиники
+  - name: Reviews
+    description: Отзывы и рейтинги врачей
+  - name: Statistics
+    description: Статистика и аналитика
+
+paths:
+  /:
+    get:
+      tags:
+        - General
+      summary: Информация об API
+      description: Корневой эндпоинт с основной информацией об API и доступных endpoints
+      operationId: getRoot
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: DentalCare App API
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  docs:
+                    type: string
+                    example: "/docs"
+                  endpoints:
+                    type: object
+                    properties:
+                      doctors:
+                        type: string
+                      appointments:
+                        type: string
+                      results:
+                        type: string
+                      patients:
+                        type: string
+
+  /api/doctors:
+    get:
+      tags:
+        - Doctors
+      summary: Получить список врачей
+      description: |
+        Получить список врачей с возможностью фильтрации по специализации.
+        
+        **User Story:** Пациент хочет выбрать врача по специализации и посмотреть доступные слоты
+      operationId: getDoctors
+      parameters:
+        - name: specialization
+          in: query
+          description: Фильтр по специализации врача
+          required: false
+          schema:
+            $ref: '#/components/schemas/DoctorSpecialization'
+        - name: include_schedule
+          in: query
+          description: Включить доступные слоты расписания
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Список врачей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DoctorWithSchedule'
+
+  /api/doctors/{doctor_id}/statistics:
+    get:
+      tags:
+        - Doctors
+      summary: Статистика работы врача
+      description: |
+        Получить подробную статистику работы врача для анализа эффективности
+        
+        **Используется:**
+        - Врачом для просмотра своих показателей
+        - Администратором для анализа
+        - Пациентами для выбора врача
+      operationId: getDoctorStatistics
+      parameters:
+        - name: doctor_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID врача
+      responses:
+        '200':
+          description: Статистика врача
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DoctorStatisticsResponse'
+        '404':
+          description: Врач не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/appointments:
+    get:
+      tags:
+        - Appointments
+      summary: Получить список записей
+      description: |
+        Получить список записей на приём с фильтрацией по пациенту, врачу или статусу
+        
+        **Use cases:**
+        - Пациент просматривает свои записи
+        - Врач смотрит расписание на день
+        - Администратор видит все новые заявки
+      operationId: getAppointments
+      parameters:
+        - name: patient_id
+          in: query
+          description: Фильтр по ID пациента
+          required: false
+          schema:
+            type: integer
+        - name: doctor_id
+          in: query
+          description: Фильтр по ID врача
+          required: false
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: Фильтр по статусу записи
+          required: false
+          schema:
+            $ref: '#/components/schemas/AppointmentStatus'
+      responses:
+        '200':
+          description: Список записей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppointmentResponse'
+
+    post:
+      tags:
+        - Appointments
+      summary: Создать новую запись на приём
+      description: |
+        Создать новую запись на приём к врачу
+        
+        **User Story:** Пациент записывается к ортодонту через приложение
+        
+        **Бизнес-логика:**
+        - Запись создаётся со статусом "pending" (ожидает подтверждения)
+        - Валидируется доступность слота
+        - Проверяется рабочее время (9:00-18:00, не выходные)
+        - Регистратура получает уведомление о новой заявке
+      operationId: createAppointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCreate'
+      responses:
+        '201':
+          description: Запись создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Некорректные данные (время в прошлом, не рабочие часы)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пациент или врач не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Время уже занято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/appointments/{appointment_id}/confirm:
+    put:
+      tags:
+        - Appointments
+      summary: Подтвердить запись (Администратор)
+      description: |
+        Подтвердить запись на приём
+        
+        **User Story:** Администратор подтверждает новые заявки пациентов
+        
+        **Результат:**
+        - Статус меняется на "confirmed"
+        - Пациент получает push-уведомление
+      operationId: confirmAppointment
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID записи
+      responses:
+        '200':
+          description: Запись подтверждена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Запись уже имеет другой статус
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Запись не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/appointments/{appointment_id}:
+    delete:
+      tags:
+        - Appointments
+      summary: Отменить запись
+      description: |
+        Отменить запись на приём
+        
+        **User Story:** Пациент отменяет запись, если изменились планы
+        
+        **Бизнес-правило:**
+        - Пациент может отменить не позднее чем за 24 часа
+        - Администратор может отменить в любое время
+        - После отмены статус = "cancelled_by_patient" или "cancelled_by_clinic"
+      operationId: cancelAppointment
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID записи
+        - name: cancelled_by
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [patient, clinic]
+            default: patient
+          description: Кто отменяет запись
+      responses:
+        '200':
+          description: Запись отменена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Отмена невозможна (< 24 часов или уже завершена)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Запись не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/appointments/{appointment_id}/complete:
+    patch:
+      tags:
+        - Appointments
+      summary: Завершить приём (Врач)
+      description: |
+        Отметить приём как проведённый и добавить медицинское заключение
+        
+        **User Story:** Врач хочет отмечать приём как проведённый
+        
+        **Acceptance Criteria:**
+        - Можно завершить только подтверждённый приём
+        - Время приёма должно быть в прошлом
+        - Добавляется диагноз, лечение, рекомендации
+        - Пациент получает уведомление
+      operationId: completeAppointment
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID записи
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentComplete'
+      responses:
+        '200':
+          description: Приём завершён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Некорректный статус или время приёма в будущем
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Запись не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/appointments/{appointment_id}/reschedule:
+    patch:
+      tags:
+        - Appointments
+      summary: Перенести запись (Администратор)
+      description: |
+        Перенести запись на другое время
+        
+        **User Story:** Администратор редактирует расписание
+        
+        **Validation:**
+        - Новое время валидируется (не в прошлом, рабочие часы)
+        - Новый слот должен быть свободен
+        - Пациент и врач получают уведомление
+      operationId: rescheduleAppointment
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID записи
+        - name: new_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Новое время приёма (ISO 8601)
+      responses:
+        '200':
+          description: Запись перенесена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Некорректное время или статус записи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Запись не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Новое время занято
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/results/{patient_id}:
+    get:
+      tags:
+        - Medical Results
+      summary: Получить результаты обследований пациента
+      description: |
+        Получить список результатов обследований для пациента
+        
+        **User Story:** Пациент просматривает результаты обследований (рентген, КТ, фото)
+        
+        **Acceptance Criteria:**
+        - Список файлов с датой и типом
+        - Можно фильтровать по типу
+        - Для каждого результата отображается врач
+      operationId: getMedicalResults
+      parameters:
+        - name: patient_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID пациента
+        - name: result_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ResultType'
+          description: Фильтр по типу результата
+      responses:
+        '200':
+          description: Список результатов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalResultResponse'
+        '404':
+          description: Пациент не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/results:
+    post:
+      tags:
+        - Medical Results
+      summary: Загрузить результат обследования (Врач)
+      description: |
+        Загрузить новый результат обследования для пациента
+        
+        **User Story:** Врач загружает рентген после приёма
+        
+        **Acceptance Criteria:**
+        - Файл сохраняется в S3
+        - Указывается название и описание
+        - Пациент получает уведомление
+      operationId: uploadMedicalResult
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalResultCreate'
+      responses:
+        '201':
+          description: Результат загружен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalResultResponse'
+        '404':
+          description: Пациент или врач не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/patients/{patient_id}:
+    get:
+      tags:
+        - Patients
+      summary: Получить информацию о пациенте
+      description: |
+        Получить подробную информацию о пациенте
+        
+        **Use case:** Врач просматривает карточку пациента
+      operationId: getPatient
+      parameters:
+        - name: patient_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID пациента
+      responses:
+        '200':
+          description: Информация о пациенте
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientBase'
+        '404':
+          description: Пациент не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/patients/{patient_id}/history:
+    get:
+      tags:
+        - Patients
+      summary: Получить полную историю пациента
+      description: |
+        Получить полную историю пациента: приёмы и результаты обследований
+        
+        **User Story:** Врач открывает карточку пациента для ознакомления с историей
+        
+        **Возвращает:**
+        - Личные данные пациента
+        - Все приёмы (прошедшие и будущие)
+        - Все результаты обследований
+        - Статистику посещений
+      operationId: getPatientHistory
+      parameters:
+        - name: patient_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID пациента
+      responses:
+        '200':
+          description: История пациента
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientHistoryResponse'
+        '404':
+          description: Пациент не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/notifications/{user_id}:
+    get:
+      tags:
+        - Notifications
+      summary: Получить уведомления пользователя
+      description: |
+        Получить список уведомлений для пользователя
+        
+        **User Story:** Пациент получает уведомления о предстоящем приёме
+        
+        **Типы уведомлений:**
+        - Подтверждение записи
+        - Напоминание о приёме (за 24 часа)
+        - Отмена приёма
+        - Перенос приёма
+        - Загрузка результата обследования
+        - Завершение приёма
+      operationId: getNotifications
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID пользователя (пациента или врача)
+        - name: unread_only
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Показать только непрочитанные
+      responses:
+        '200':
+          description: Список уведомлений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationResponse'
+
+  /api/services:
+    get:
+      tags:
+        - Services
+      summary: Получить прайс-лист услуг клиники
+      description: |
+        Получить список услуг клиники с ценами
+        
+        **Назначение:** Предоставить пациентам информацию о доступных услугах и ценах
+        для планирования лечения
+      operationId: getServices
+      parameters:
+        - name: specialization
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DoctorSpecialization'
+          description: Фильтр по специализации врача
+      responses:
+        '200':
+          description: Список услуг
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceResponse'
+
+  /api/reviews:
+    post:
+      tags:
+        - Reviews
+      summary: Оставить отзыв о приёме
+      description: |
+        Оставить отзыв о приёме и оценить работу врача
+        
+        После завершённого приёма пациент может оставить отзыв и оценку.
+        Оценка влияет на общий рейтинг врача.
+        
+        **Validation:**
+        - Приём должен существовать и быть завершённым
+        - Пациент должен быть участником приёма
+        - Можно оставить только один отзыв на приём
+      operationId: createReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreate'
+      responses:
+        '201':
+          description: Отзыв создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponse'
+        '400':
+          description: Приём не завершён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Нет прав для оставления отзыва
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Приём не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Отзыв уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/stats:
+    get:
+      tags:
+        - Statistics
+      summary: Получить общую статистику системы
+      description: |
+        Получить общую статистику системы для администратора
+        
+        **Показатели:**
+        - Количество врачей, пациентов
+        - Количество записей по статусам
+        - Количество результатов обследований
+      operationId: getStats
+      responses:
+        '200':
+          description: Статистика системы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_doctors:
+                    type: integer
+                  total_patients:
+                    type: integer
+                  total_appointments:
+                    type: integer
+                  pending_appointments:
+                    type: integer
+                  confirmed_appointments:
+                    type: integer
+                  total_results:
+                    type: integer
+
+components:
+  schemas:
+    DoctorSpecialization:
+      type: string
+      enum:
+        - orthodontist
+        - surgeon
+        - therapist
+        - periodontist
+        - orthopedist
+      description: |
+        Специализация врача:
+        - orthodontist: Ортодонт
+        - surgeon: Хирург
+        - therapist: Терапевт
+        - periodontist: Пародонтолог
+        - orthopedist: Ортопед
+
+    AppointmentStatus:
+      type: string
+      enum:
+        - pending
+        - confirmed
+        - completed
+        - cancelled_by_patient
+        - cancelled_by_clinic
+      description: |
+        Статус записи на приём:
+        - pending: Ожидает подтверждения
+        - confirmed: Подтверждена
+        - completed: Проведена
+        - cancelled_by_patient: Отменена пациентом
+        - cancelled_by_clinic: Отменена клиникой
+
+    ResultType:
+      type: string
+      enum:
+        - xray
+        - ct
+        - photo
+        - conclusion
+      description: |
+        Тип результата обследования:
+        - xray: Рентген
+        - ct: КТ
+        - photo: Фото
+        - conclusion: Заключение
+
+    NotificationType:
+      type: string
+      enum:
+        - appointment_confirmed
+        - appointment_reminder
+        - appointment_cancelled
+        - appointment_rescheduled
+        - result_uploaded
+        - appointment_completed
+      description: |
+        Тип уведомления:
+        - appointment_confirmed: Запись подтверждена
+        - appointment_reminder: Напоминание о приёме
+        - appointment_cancelled: Запись отменена
+        - appointment_rescheduled: Запись перенесена
+        - result_uploaded: Загружен результат
+        - appointment_completed: Приём завершён
+
+    DoctorBase:
+      type: object
+      required:
+        - id
+        - first_name
+        - last_name
+        - specialization
+        - experience_years
+      properties:
+        id:
+          type: integer
+          description: Уникальный идентификатор врача
+        first_name:
+          type: string
+          description: Имя врача
+        last_name:
+          type: string
+          description: Фамилия врача
+        specialization:
+          $ref: '#/components/schemas/DoctorSpecialization'
+        experience_years:
+          type: integer
+          minimum: 0
+          description: Опыт работы в годах
+        photo_url:
+          type: string
+          nullable: true
+          description: URL фотографии врача
+        rating:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 5
+          nullable: true
+          description: Рейтинг врача (0-5)
+        reviews_count:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Количество отзывов
+
+    DoctorWithSchedule:
+      allOf:
+        - $ref: '#/components/schemas/DoctorBase'
+        - type: object
+          properties:
+            available_slots:
+              type: array
+              items:
+                type: string
+                format: date-time
+              description: Доступные временные слоты
+
+    PatientBase:
+      type: object
+      required:
+        - id
+        - first_name
+        - last_name
+        - phone
+      properties:
+        id:
+          type: integer
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone:
+          type: string
+          pattern: '^\+7\d{10}$'
+          example: "+79161234567"
+        email:
+          type: string
+          format: email
+          nullable: true
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+
+    AppointmentCreate:
+      type: object
+      required:
+        - patient_id
+        - doctor_id
+        - appointment_time
+        - service_type
+      properties:
+        patient_id:
+          type: integer
+        doctor_id:
+          type: integer
+        appointment_time:
+          type: string
+          format: date-time
+          description: Время приёма (ISO 8601)
+        service_type:
+          type: string
+          example: "Консультация ортодонта"
+        notes:
+          type: string
+          nullable: true
+          description: Дополнительные заметки
+
+    AppointmentResponse:
+      type: object
+      required:
+        - id
+        - patient_id
+        - patient_name
+        - doctor_id
+        - doctor_name
+        - appointment_time
+        - service_type
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+        patient_id:
+          type: integer
+        patient_name:
+          type: string
+        doctor_id:
+          type: integer
+        doctor_name:
+          type: string
+        appointment_time:
+          type: string
+          format: date-time
+        service_type:
+          type: string
+        status:
+          $ref: '#/components/schemas/AppointmentStatus'
+        notes:
+          type: string
+          nullable: true
+        diagnosis:
+          type: string
+          nullable: true
+          description: Диагноз (заполняется врачом)
+        treatment:
+          type: string
+          nullable: true
+          description: Проведённое лечение
+        recommendations:
+          type: string
+          nullable: true
+          description: Рекомендации пациенту
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AppointmentComplete:
+      type: object
+      properties:
+        diagnosis:
+          type: string
+          nullable: true
+          example: "Кариес 36 зуба"
+        treatment:
+          type: string
+          nullable: true
+          example: "Пломбирование композитным материалом"
+        recommendations:
+          type: string
+          nullable: true
+          example: "Контрольный осмотр через 6 месяцев"
+        notes:
+          type: string
+          nullable: true
+
+    MedicalResultCreate:
+      type: object
+      required:
+        - patient_id
+        - doctor_id
+        - result_type
+        - title
+        - file_url
+      properties:
+        patient_id:
+          type: integer
+        doctor_id:
+          type: integer
+        result_type:
+          $ref: '#/components/schemas/ResultType'
+        title:
+          type: string
+          example: "Панорамный снимок"
+        description:
+          type: string
+          nullable: true
+        file_url:
+          type: string
+          format: uri
+          example: "https://s3.example.com/results/12345.jpg"
+
+    MedicalResultResponse:
+      type: object
+      required:
+        - id
+        - patient_id
+        - doctor_id
+        - doctor_name
+        - result_type
+        - title
+        - file_url
+        - created_at
+      properties:
+        id:
+          type: integer
+        patient_id:
+          type: integer
+        doctor_id:
+          type: integer
+        doctor_name:
+          type: string
+        result_type:
+          $ref: '#/components/schemas/ResultType'
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        file_url:
+          type: string
+          format: uri
+        created_at:
+          type: string
+          format: date-time
+
+    ServiceResponse:
+      type: object
+      required:
+        - id
+        - name
+        - price
+        - duration_minutes
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: "Консультация ортодонта"
+        description:
+          type: string
+          nullable: true
+        price:
+          type: number
+          format: float
+          minimum: 0
+          description: Цена услуги в рублях
+          example: 1500.0
+        duration_minutes:
+          type: integer
+          minimum: 0
+          description: Длительность процедуры в минутах
+          example: 30
+        specialization:
+          $ref: '#/components/schemas/DoctorSpecialization'
+
+    ReviewCreate:
+      type: object
+      required:
+        - patient_id
+        - doctor_id
+        - appointment_id
+        - rating
+      properties:
+        patient_id:
+          type: integer
+        doctor_id:
+          type: integer
+        appointment_id:
+          type: integer
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Оценка от 1 до 5
+        comment:
+          type: string
+          maxLength: 1000
+          nullable: true
+
+    ReviewResponse:
+      type: object
+      required:
+        - id
+        - patient_id
+        - patient_name
+        - doctor_id
+        - appointment_id
+        - rating
+        - created_at
+      properties:
+        id:
+          type: integer
+        patient_id:
+          type: integer
+        patient_name:
+          type: string
+        doctor_id:
+          type: integer
+        appointment_id:
+          type: integer
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - notification_type
+        - title
+        - message
+        - is_read
+        - created_at
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+          description: ID пользователя (пациента или врача)
+        notification_type:
+          $ref: '#/components/schemas/NotificationType'
+        title:
+          type: string
+          example: "Запись подтверждена"
+        message:
+          type: string
+          example: "Ваша запись к врачу Анна Иванова подтверждена"
+        is_read:
+          type: boolean
+          default: false
+        related_id:
+          type: integer
+          nullable: true
+          description: ID связанной записи/результата
+        created_at:
+          type: string
+          format: date-time
+
+    PatientHistoryResponse:
+      type: object
+      required:
+        - patient
+        - total_appointments
+        - completed_appointments
+        - upcoming_appointments
+      properties:
+        patient:
+          $ref: '#/components/schemas/PatientBase'
+        appointments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppointmentResponse'
+        medical_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicalResultResponse'
+        total_appointments:
+          type: integer
+        completed_appointments:
+          type: integer
+        upcoming_appointments:
+          type: integer
+
+    DoctorStatisticsResponse:
+      type: object
+      required:
+        - doctor_id
+        - doctor_name
+        - total_appointments
+        - completed_appointments
+        - upcoming_appointments
+        - cancelled_appointments
+        - total_reviews
+        - patients_served
+      properties:
+        doctor_id:
+          type: integer
+        doctor_name:
+          type: string
+        total_appointments:
+          type: integer
+        completed_appointments:
+          type: integer
+        upcoming_appointments:
+          type: integer
+        cancelled_appointments:
+          type: integer
+        average_rating:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 5
+        total_reviews:
+          type: integer
+        patients_served:
+          type: integer
+          description: Количество уникальных пациентов
+
+    SuccessResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          default: true
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+        details:
+          type: string
+          nullable: true
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT токен для авторизации
+        
+        В продакшн версии требуется авторизация через JWT токен.
+        Демо версия работает без авторизации.
+
+security: []
+

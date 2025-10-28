@@ -47,5 +47,6 @@ Dental/
 ├── main.py              # Основной файл приложения с эндпоинтами
 ├── models.py            # Pydantic модели данных
 ├── requirements.txt     # Зависимости проекта
-└── README.md           # Документация
+└── README.md            # Документация
+└── openapi.yaml         # полная спецификация OpenAPI 3.1.0
 ```

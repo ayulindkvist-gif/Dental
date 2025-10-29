@@ -36,7 +36,6 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 После запуска откройте в браузере:
 - **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
 - **OpenAPI Spec**: http://localhost:8000/openapi.json
 
 Или используйте статический файл спецификации:
